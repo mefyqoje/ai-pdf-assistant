@@ -104,7 +104,7 @@ ai-pdf-assistant/
 ### 1. Клонировать репозиторий
 
 ```bash
-git clone https://github.com/<username>/ai-pdf-assistant.git
+git clone https://github.com/mefyqoje/ai-pdf-assistant.git
 cd ai-pdf-assistant
 ```
 
