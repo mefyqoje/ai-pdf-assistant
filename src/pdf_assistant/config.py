@@ -13,3 +13,6 @@ EMBEDDING_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 TOP_K = 5
+
+OLLAMA_MODEL_NAME = "llama3.2:3b"
+OLLAMA_BASE_URL = "http://localhost:11434"
