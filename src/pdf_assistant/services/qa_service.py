@@ -11,12 +11,12 @@ class QAService:
             base_url=OLLAMA_BASE_URL,
         )
 
+    def reload_retriever(self) -> None:
+        self.retriever.reload()
+
     def build_prompt(self, question: str, context_chunks: list[dict]) -> str:
         context = "\n\n".join(
-            [
-                f"[Страница {chunk['page']}]\n{chunk['text']}"
-                for chunk in context_chunks
-            ]
+            [f"[Страница {chunk['page']}]\n{chunk['text']}" for chunk in context_chunks]
         )
 
         return f"""
