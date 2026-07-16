@@ -1,3 +1,5 @@
+import json
+
 import requests
 import streamlit as st
 
@@ -41,10 +43,7 @@ def render_sources(
             "неизвестна",
         )
         reranker_score = float(
-            source.get(
-                "score",
-                0.0,
-            )
+            source.get("score", 0.0)
         )
         retrieval_score = float(
             source.get(
@@ -65,7 +64,8 @@ def render_sources(
 
         with st.expander(title):
             st.caption(
-                f"FAISS score: {retrieval_score:.3f}"
+                f"FAISS score: "
+                f"{retrieval_score:.3f}"
             )
             st.write(text)
 
@@ -75,7 +75,6 @@ def build_history_for_api() -> list[dict]:
 
     for message in st.session_state.messages[:-1]:
         role = message.get("role")
-
         content = str(
             message.get(
                 "content",
@@ -83,7 +82,10 @@ def build_history_for_api() -> list[dict]:
             )
         ).strip()
 
-        if role in {"user", "assistant"} and content:
+        if role in {
+            "user",
+            "assistant",
+        } and content:
             history.append(
                 {
                     "role": role,
@@ -99,12 +101,14 @@ def upload_documents(
 ) -> None:
     successful_files = 0
     total_chunks = 0
-
     progress = st.progress(0)
 
-    for index, uploaded_file in enumerate(uploaded_files):
+    for index, uploaded_file in enumerate(
+        uploaded_files
+    ):
         with st.spinner(
-            f"Индексируем документ «{uploaded_file.name}»..."
+            f"Индексируем документ "
+            f"«{uploaded_file.name}»..."
         ):
             files = {
                 "file": (
@@ -122,12 +126,15 @@ def upload_documents(
                 )
             except requests.RequestException as error:
                 st.error(
-                    f"Не удалось подключиться к API при загрузке "
-                    f"«{uploaded_file.name}»: {error}"
+                    f"Не удалось подключиться к API "
+                    f"при загрузке "
+                    f"«{uploaded_file.name}»: "
+                    f"{error}"
                 )
 
                 progress.progress(
-                    (index + 1) / len(uploaded_files)
+                    (index + 1)
+                    / len(uploaded_files)
                 )
                 continue
 
@@ -150,31 +157,36 @@ def upload_documents(
 
                 if (
                     filename
-                    not in st.session_state.indexed_documents
+                    not in st.session_state
+                    .indexed_documents
                 ):
-                    st.session_state.indexed_documents.append(
-                        filename
-                    )
+                    st.session_state\
+                        .indexed_documents\
+                        .append(filename)
 
                 st.success(
-                    f"«{filename}» проиндексирован: "
+                    f"«{filename}» "
+                    f"проиндексирован: "
                     f"{chunks_count} чанков."
                 )
             else:
                 st.error(
-                    f"Ошибка индексации «{uploaded_file.name}»: "
+                    f"Ошибка индексации "
+                    f"«{uploaded_file.name}»: "
                     f"{response.text}"
                 )
 
         progress.progress(
-            (index + 1) / len(uploaded_files)
+            (index + 1)
+            / len(uploaded_files)
         )
 
     if successful_files:
         st.info(
-            f"Успешно проиндексировано документов: "
-            f"{successful_files}. "
-            f"Всего добавлено чанков: {total_chunks}."
+            f"Успешно проиндексировано "
+            f"документов: {successful_files}. "
+            f"Всего добавлено чанков: "
+            f"{total_chunks}."
         )
 
 
@@ -188,21 +200,33 @@ def render_sidebar() -> None:
             accept_multiple_files=True,
         )
 
-        if uploaded_files:
-            if st.button(
-                "Проиндексировать документы",
-                use_container_width=True,
+        if uploaded_files and st.button(
+            "Проиндексировать документы",
+            use_container_width=True,
+        ):
+            upload_documents(
+                uploaded_files
+            )
+
+        if (
+            st.session_state
+            .indexed_documents
+        ):
+            st.subheader(
+                "Загруженные документы"
+            )
+
+            for document in (
+                st.session_state
+                .indexed_documents
             ):
-                upload_documents(uploaded_files)
-
-        if st.session_state.indexed_documents:
-            st.subheader("Загруженные документы")
-
-            for document in st.session_state.indexed_documents:
-                st.write(f"- {document}")
+                st.write(
+                    f"- {document}"
+                )
         else:
             st.caption(
-                "В текущей сессии документы еще не загружены."
+                "В текущей сессии "
+                "документы еще не загружены."
             )
 
         st.divider()
@@ -216,7 +240,9 @@ def render_sidebar() -> None:
 
 
 def render_chat_history() -> None:
-    for message in st.session_state.messages:
+    for message in (
+        st.session_state.messages
+    ):
         role = message.get(
             "role",
             "assistant",
@@ -230,119 +256,187 @@ def render_chat_history() -> None:
             st.markdown(content)
 
             search_query = message.get(
-                "search_query",
+                "search_query"
             )
 
             if search_query:
                 st.caption(
-                    f"Поисковый запрос с учетом контекста: "
+                    "Поисковый запрос "
+                    "с учетом контекста: "
                     f"{search_query}"
                 )
 
             sources = message.get(
-                "sources",
+                "sources"
             )
 
             if sources:
                 render_sources(sources)
 
 
-def request_answer(
+def request_streaming_answer(
     question: str,
 ) -> None:
-    history_for_api = build_history_for_api()
+    history_for_api = (
+        build_history_for_api()
+    )
 
     with st.chat_message("assistant"):
-        with st.spinner(
-            "Ищем информацию и формируем ответ..."
-        ):
-            try:
-                response = requests.post(
-                    f"{API_URL}/ask",
-                    json={
-                        "question": question,
-                        "history": history_for_api,
-                    },
-                    timeout=REQUEST_TIMEOUT,
+        answer_placeholder = st.empty()
+        status_placeholder = st.empty()
+
+        full_answer = ""
+        sources = []
+        search_query = None
+
+        try:
+            with requests.post(
+                f"{API_URL}/ask/stream",
+                json={
+                    "question": question,
+                    "history": history_for_api,
+                },
+                stream=True,
+                timeout=REQUEST_TIMEOUT,
+            ) as response:
+                if response.status_code != 200:
+                    error_message = (
+                        f"API вернул ошибку "
+                        f"{response.status_code}: "
+                        f"{response.text}"
+                    )
+
+                    st.error(error_message)
+
+                    st.session_state.messages.append(
+                        {
+                            "role": "assistant",
+                            "content": error_message,
+                        }
+                    )
+                    return
+
+                status_placeholder.caption(
+                    "Ищем информацию "
+                    "и формируем ответ..."
                 )
-            except requests.RequestException as error:
-                error_message = (
-                    f"Не удалось подключиться к API: {error}"
-                )
 
-                st.error(error_message)
+                for raw_line in (
+                    response.iter_lines()
+                ):
+                    if not raw_line:
+                        continue
 
-                st.session_state.messages.append(
-                    {
-                        "role": "assistant",
-                        "content": error_message,
-                    }
-                )
-                return
+                    event = json.loads(
+                        raw_line.decode(
+                            "utf-8"
+                        )
+                    )
 
-            if response.status_code != 200:
-                error_message = (
-                    f"API вернул ошибку "
-                    f"{response.status_code}: "
-                    f"{response.text}"
-                )
+                    event_type = event.get(
+                        "type"
+                    )
 
-                st.error(error_message)
+                    if event_type == "metadata":
+                        sources = event.get(
+                            "sources",
+                            [],
+                        )
+                        search_query = event.get(
+                            "search_query"
+                        )
 
-                st.session_state.messages.append(
-                    {
-                        "role": "assistant",
-                        "content": error_message,
-                    }
-                )
-                return
+                        if (
+                            search_query
+                            and search_query.strip()
+                            != question.strip()
+                        ):
+                            status_placeholder.caption(
+                                "Поисковый запрос "
+                                "с учетом контекста: "
+                                f"{search_query}"
+                            )
 
-            result = response.json()
+                    elif event_type == "token":
+                        full_answer += event.get(
+                            "content",
+                            "",
+                        )
 
-            answer = result.get(
-                "answer",
-                "Ответ отсутствует.",
+                        answer_placeholder.markdown(
+                            full_answer + "▌"
+                        )
+
+                    elif event_type == "done":
+                        break
+
+        except requests.RequestException as error:
+            error_message = (
+                "Не удалось подключиться "
+                f"к API: {error}"
             )
-            sources = result.get(
-                "sources",
-                [],
-            )
-            search_query = result.get(
-                "search_query",
-            )
 
-            st.markdown(answer)
-
-            if (
-                search_query
-                and search_query.strip()
-                != question.strip()
-            ):
-                st.caption(
-                    f"Поисковый запрос с учетом контекста: "
-                    f"{search_query}"
-                )
-
-            render_sources(sources)
-
-            assistant_message = {
-                "role": "assistant",
-                "content": answer,
-                "sources": sources,
-            }
-
-            if (
-                search_query
-                and search_query.strip()
-                != question.strip()
-            ):
-                assistant_message["search_query"] = (
-                    search_query
-                )
+            st.error(error_message)
 
             st.session_state.messages.append(
-                assistant_message
+                {
+                    "role": "assistant",
+                    "content": error_message,
+                }
             )
+            return
+        except json.JSONDecodeError as error:
+            error_message = (
+                "Получен некорректный "
+                f"потоковый ответ: {error}"
+            )
+
+            st.error(error_message)
+
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": error_message,
+                }
+            )
+            return
+
+        answer_placeholder.markdown(
+            full_answer
+        )
+        status_placeholder.empty()
+
+        if (
+            search_query
+            and search_query.strip()
+            != question.strip()
+        ):
+            st.caption(
+                "Поисковый запрос "
+                "с учетом контекста: "
+                f"{search_query}"
+            )
+
+        render_sources(sources)
+
+        assistant_message = {
+            "role": "assistant",
+            "content": full_answer,
+            "sources": sources,
+        }
+
+        if (
+            search_query
+            and search_query.strip()
+            != question.strip()
+        ):
+            assistant_message[
+                "search_query"
+            ] = search_query
+
+        st.session_state.messages.append(
+            assistant_message
+        )
 
 
 initialize_session_state()
@@ -350,15 +444,17 @@ initialize_session_state()
 st.title("📄 AI PDF Assistant")
 
 st.write(
-    "Загрузите один или несколько PDF-документов "
-    "и задавайте вопросы по общей базе знаний."
+    "Загрузите один или несколько "
+    "PDF-документов и задавайте "
+    "вопросы по общей базе знаний."
 )
 
 render_sidebar()
 render_chat_history()
 
 question = st.chat_input(
-    "Задайте вопрос по загруженным документам"
+    "Задайте вопрос "
+    "по загруженным документам"
 )
 
 if question:
@@ -373,6 +469,10 @@ if question:
         )
 
         with st.chat_message("user"):
-            st.markdown(clean_question)
+            st.markdown(
+                clean_question
+            )
 
-        request_answer(clean_question)
+        request_streaming_answer(
+            clean_question
+        )

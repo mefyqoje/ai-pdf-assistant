@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+
 from pdf_assistant.config import (
     OLLAMA_BASE_URL,
     OLLAMA_MODEL_NAME,
@@ -157,38 +159,10 @@ class QAService:
 Ответ:
 """.strip()
 
-    def answer(
-        self,
-        question: str,
-        history: list[dict] | None = None,
-    ) -> dict:
-        history = history or []
-
-        search_query = self.build_search_query(
-            question=question,
-            history=history,
-        )
-
-        chunks = self.retriever.retrieve(search_query)
-
-        if not chunks:
-            return {
-                "answer": (
-                    "В загруженных документах нет достаточной "
-                    "информации для ответа."
-                ),
-                "sources": [],
-                "search_query": search_query,
-            }
-
-        prompt = self.build_prompt(
-            question=question,
-            context_chunks=chunks,
-            history=history,
-        )
-
-        answer = self.llm.generate(prompt).strip()
-
+    @staticmethod
+    def _build_sources(
+        chunks: list[dict],
+    ) -> list[dict]:
         sources = []
 
         for chunk in chunks:
@@ -224,8 +198,99 @@ class QAService:
                 }
             )
 
+        return sources
+
+    def prepare_answer(
+        self,
+        question: str,
+        history: list[dict] | None = None,
+    ) -> dict:
+        history = history or []
+
+        search_query = self.build_search_query(
+            question=question,
+            history=history,
+        )
+
+        chunks = self.retriever.retrieve(
+            search_query
+        )
+
+        if not chunks:
+            return {
+                "prompt": None,
+                "sources": [],
+                "search_query": search_query,
+                "empty_answer": (
+                    "В загруженных документах нет достаточной "
+                    "информации для ответа."
+                ),
+            }
+
+        prompt = self.build_prompt(
+            question=question,
+            context_chunks=chunks,
+            history=history,
+        )
+
+        return {
+            "prompt": prompt,
+            "sources": self._build_sources(chunks),
+            "search_query": search_query,
+            "empty_answer": None,
+        }
+
+    def answer(
+        self,
+        question: str,
+        history: list[dict] | None = None,
+    ) -> dict:
+        prepared = self.prepare_answer(
+            question=question,
+            history=history,
+        )
+
+        if prepared["empty_answer"]:
+            return {
+                "answer": prepared["empty_answer"],
+                "sources": prepared["sources"],
+                "search_query": prepared["search_query"],
+            }
+
+        answer = self.llm.generate(
+            prepared["prompt"]
+        ).strip()
+
         return {
             "answer": answer,
-            "sources": sources,
-            "search_query": search_query,
+            "sources": prepared["sources"],
+            "search_query": prepared["search_query"],
         }
+
+    def answer_stream(
+        self,
+        question: str,
+        history: list[dict] | None = None,
+    ) -> tuple[Iterator[str], list[dict], str]:
+        prepared = self.prepare_answer(
+            question=question,
+            history=history,
+        )
+
+        if prepared["empty_answer"]:
+            def empty_generator() -> Iterator[str]:
+                yield prepared["empty_answer"]
+
+            return (
+                empty_generator(),
+                prepared["sources"],
+                prepared["search_query"],
+            )
+
+        return (
+            self.llm.generate_stream(
+                prepared["prompt"]
+            ),
+            prepared["sources"],
+            prepared["search_query"],
+        )

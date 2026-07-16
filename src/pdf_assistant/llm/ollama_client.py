@@ -1,3 +1,6 @@
+import json
+from collections.abc import Iterator
+
 import requests
 
 
@@ -8,7 +11,7 @@ class OllamaClient:
         base_url: str = "http://localhost:11434",
     ) -> None:
         self.model_name = model_name
-        self.base_url = base_url
+        self.base_url = base_url.rstrip("/")
 
     def generate(self, prompt: str) -> str:
         response = requests.post(
@@ -18,9 +21,43 @@ class OllamaClient:
                 "prompt": prompt,
                 "stream": False,
             },
-            timeout=120,
+            timeout=600,
         )
 
         response.raise_for_status()
 
-        return response.json()["response"]
+        data = response.json()
+
+        return str(data.get("response", "")).strip()
+
+    def generate_stream(
+        self,
+        prompt: str,
+    ) -> Iterator[str]:
+        with requests.post(
+            f"{self.base_url}/api/generate",
+            json={
+                "model": self.model_name,
+                "prompt": prompt,
+                "stream": True,
+            },
+            stream=True,
+            timeout=600,
+        ) as response:
+            response.raise_for_status()
+
+            for line in response.iter_lines():
+                if not line:
+                    continue
+
+                payload = json.loads(
+                    line.decode("utf-8")
+                )
+
+                token = payload.get("response", "")
+
+                if token:
+                    yield token
+
+                if payload.get("done"):
+                    break
