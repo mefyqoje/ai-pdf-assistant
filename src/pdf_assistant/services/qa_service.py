@@ -9,6 +9,7 @@ from pdf_assistant.services.retriever_service import RetrieverService
 class QAService:
     def __init__(self) -> None:
         self.retriever = RetrieverService()
+
         self.llm = OllamaClient(
             model_name=OLLAMA_MODEL_NAME,
             base_url=OLLAMA_BASE_URL,
@@ -38,7 +39,13 @@ class QAService:
                 message.get("role", ""),
                 "Участник",
             )
-            content = str(message.get("content", "")).strip()
+
+            content = str(
+                message.get(
+                    "content",
+                    "",
+                )
+            ).strip()
 
             if content:
                 formatted_messages.append(
@@ -70,7 +77,9 @@ class QAService:
 - "а какие еще";
 - "что насчет этого";
 - "а во втором документе";
-- местоимения и сокращенные формулировки.
+- местоимения;
+- сокращенные формулировки;
+- ссылки на предыдущий вопрос.
 
 Не отвечай на вопрос.
 Верни только один самостоятельный поисковый запрос без пояснений.
@@ -101,8 +110,14 @@ class QAService:
                 "document",
                 "Неизвестный документ",
             )
-            page = chunk.get("page", "неизвестна")
-            text = chunk["text"]
+            page = chunk.get(
+                "page",
+                "неизвестна",
+            )
+            text = chunk.get(
+                "text",
+                "",
+            )
 
             context_parts.append(
                 (
@@ -121,11 +136,12 @@ class QAService:
 Правила:
 - Отвечай на русском языке.
 - Используй факты только из предоставленного контекста.
-- История диалога нужна для понимания уточняющих вопросов, но не является источником фактов.
+- История диалога нужна только для понимания уточняющих вопросов.
+- История диалога не является источником фактов.
 - Не придумывай сведения, которых нет в контексте.
 - Если информации недостаточно, напиши:
   "В загруженных документах нет достаточной информации для ответа."
-- При использовании факта указывай документ и страницу.
+- При использовании сведений указывай имя документа и страницу.
 - Не утверждай, что изучил весь документ, если в контексте есть только отдельные фрагменты.
 - Ответ должен быть понятным и структурированным.
 
@@ -182,9 +198,29 @@ class QAService:
                         "document",
                         "Неизвестный документ",
                     ),
-                    "page": chunk.get("page"),
-                    "score": chunk.get("score", 0.0),
-                    "text": chunk["text"][:500],
+                    "page": chunk.get(
+                        "page",
+                        "неизвестна",
+                    ),
+                    "score": float(
+                        chunk.get(
+                            "reranker_score",
+                            chunk.get(
+                                "score",
+                                0.0,
+                            ),
+                        )
+                    ),
+                    "retrieval_score": float(
+                        chunk.get(
+                            "retrieval_score",
+                            0.0,
+                        )
+                    ),
+                    "text": chunk.get(
+                        "text",
+                        "",
+                    )[:500],
                 }
             )
 

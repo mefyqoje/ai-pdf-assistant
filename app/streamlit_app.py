@@ -22,7 +22,9 @@ def initialize_session_state() -> None:
         st.session_state.indexed_documents = []
 
 
-def render_sources(sources: list[dict]) -> None:
+def render_sources(
+    sources: list[dict],
+) -> None:
     if not sources:
         st.info("Источники не найдены.")
         return
@@ -38,9 +40,15 @@ def render_sources(sources: list[dict]) -> None:
             "page",
             "неизвестна",
         )
-        score = float(
+        reranker_score = float(
             source.get(
                 "score",
+                0.0,
+            )
+        )
+        retrieval_score = float(
+            source.get(
+                "retrieval_score",
                 0.0,
             )
         )
@@ -52,20 +60,22 @@ def render_sources(sources: list[dict]) -> None:
         title = (
             f"📄 {document} | "
             f"страница {page} | "
-            f"score={score:.3f}"
+            f"rerank={reranker_score:.3f}"
         )
 
         with st.expander(title):
+            st.caption(
+                f"FAISS score: {retrieval_score:.3f}"
+            )
             st.write(text)
 
 
 def build_history_for_api() -> list[dict]:
     history = []
 
-    # Последнее сообщение — текущий вопрос пользователя.
-    # Оно передается отдельно в поле question, поэтому исключаем его через [:-1].
     for message in st.session_state.messages[:-1]:
         role = message.get("role")
+
         content = str(
             message.get(
                 "content",
@@ -84,7 +94,9 @@ def build_history_for_api() -> list[dict]:
     return history[-MAX_HISTORY_MESSAGES:]
 
 
-def upload_documents(uploaded_files) -> None:
+def upload_documents(
+    uploaded_files,
+) -> None:
     successful_files = 0
     total_chunks = 0
 
@@ -113,6 +125,7 @@ def upload_documents(uploaded_files) -> None:
                     f"Не удалось подключиться к API при загрузке "
                     f"«{uploaded_file.name}»: {error}"
                 )
+
                 progress.progress(
                     (index + 1) / len(uploaded_files)
                 )
@@ -135,7 +148,10 @@ def upload_documents(uploaded_files) -> None:
                 successful_files += 1
                 total_chunks += chunks_count
 
-                if filename not in st.session_state.indexed_documents:
+                if (
+                    filename
+                    not in st.session_state.indexed_documents
+                ):
                     st.session_state.indexed_documents.append(
                         filename
                     )
@@ -213,7 +229,9 @@ def render_chat_history() -> None:
         with st.chat_message(role):
             st.markdown(content)
 
-            search_query = message.get("search_query")
+            search_query = message.get(
+                "search_query",
+            )
 
             if search_query:
                 st.caption(
@@ -221,13 +239,17 @@ def render_chat_history() -> None:
                     f"{search_query}"
                 )
 
-            sources = message.get("sources")
+            sources = message.get(
+                "sources",
+            )
 
             if sources:
                 render_sources(sources)
 
 
-def request_answer(question: str) -> None:
+def request_answer(
+    question: str,
+) -> None:
     history_for_api = build_history_for_api()
 
     with st.chat_message("assistant"):
@@ -285,11 +307,17 @@ def request_answer(question: str) -> None:
                 "sources",
                 [],
             )
-            search_query = result.get("search_query")
+            search_query = result.get(
+                "search_query",
+            )
 
             st.markdown(answer)
 
-            if search_query and search_query.strip() != question.strip():
+            if (
+                search_query
+                and search_query.strip()
+                != question.strip()
+            ):
                 st.caption(
                     f"Поисковый запрос с учетом контекста: "
                     f"{search_query}"
@@ -303,8 +331,14 @@ def request_answer(question: str) -> None:
                 "sources": sources,
             }
 
-            if search_query and search_query.strip() != question.strip():
-                assistant_message["search_query"] = search_query
+            if (
+                search_query
+                and search_query.strip()
+                != question.strip()
+            ):
+                assistant_message["search_query"] = (
+                    search_query
+                )
 
             st.session_state.messages.append(
                 assistant_message
@@ -314,6 +348,7 @@ def request_answer(question: str) -> None:
 initialize_session_state()
 
 st.title("📄 AI PDF Assistant")
+
 st.write(
     "Загрузите один или несколько PDF-документов "
     "и задавайте вопросы по общей базе знаний."
