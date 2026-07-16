@@ -3,15 +3,12 @@ from pdf_assistant.config import (
     OLLAMA_MODEL_NAME,
 )
 from pdf_assistant.llm.ollama_client import OllamaClient
-from pdf_assistant.services.retriever_service import (
-    RetrieverService,
-)
+from pdf_assistant.services.retriever_service import RetrieverService
 
 
 class QAService:
     def __init__(self) -> None:
         self.retriever = RetrieverService()
-
         self.llm = OllamaClient(
             model_name=OLLAMA_MODEL_NAME,
             base_url=OLLAMA_BASE_URL,
@@ -20,10 +17,82 @@ class QAService:
     def reload_retriever(self) -> None:
         self.retriever.reload()
 
+    @staticmethod
+    def _format_history(
+        history: list[dict],
+        max_messages: int = 6,
+    ) -> str:
+        if not history:
+            return "История диалога отсутствует."
+
+        recent_messages = history[-max_messages:]
+        formatted_messages = []
+
+        role_names = {
+            "user": "Пользователь",
+            "assistant": "Ассистент",
+        }
+
+        for message in recent_messages:
+            role = role_names.get(
+                message.get("role", ""),
+                "Участник",
+            )
+            content = str(message.get("content", "")).strip()
+
+            if content:
+                formatted_messages.append(
+                    f"{role}: {content}"
+                )
+
+        if not formatted_messages:
+            return "История диалога отсутствует."
+
+        return "\n".join(formatted_messages)
+
+    def build_search_query(
+        self,
+        question: str,
+        history: list[dict],
+    ) -> str:
+        if not history:
+            return question
+
+        history_text = self._format_history(
+            history,
+            max_messages=4,
+        )
+
+        prompt = f"""
+Преобразуй последний вопрос пользователя в самостоятельный поисковый запрос.
+
+Используй историю только для разрешения ссылок и уточнений:
+- "а какие еще";
+- "что насчет этого";
+- "а во втором документе";
+- местоимения и сокращенные формулировки.
+
+Не отвечай на вопрос.
+Верни только один самостоятельный поисковый запрос без пояснений.
+
+История:
+{history_text}
+
+Последний вопрос:
+{question}
+
+Самостоятельный запрос:
+""".strip()
+
+        rewritten_query = self.llm.generate(prompt).strip()
+
+        return rewritten_query or question
+
     def build_prompt(
         self,
         question: str,
         context_chunks: list[dict],
+        history: list[dict],
     ) -> str:
         context_parts = []
 
@@ -44,23 +113,29 @@ class QAService:
             )
 
         context = "\n\n---\n\n".join(context_parts)
+        history_text = self._format_history(history)
 
         return f"""
 Ты — AI-ассистент по базе PDF-документов.
 
 Правила:
 - Отвечай на русском языке.
-- Используй только информацию из предоставленного контекста.
-- Не придумывай факты, которых нет в контексте.
-- Если информации недостаточно, прямо напиши:
+- Используй факты только из предоставленного контекста.
+- История диалога нужна для понимания уточняющих вопросов, но не является источником фактов.
+- Не придумывай сведения, которых нет в контексте.
+- Если информации недостаточно, напиши:
   "В загруженных документах нет достаточной информации для ответа."
-- Если используешь сведения из контекста, укажи имя документа и страницу.
-- Сформулируй ответ понятно и кратко.
+- При использовании факта указывай документ и страницу.
+- Не утверждай, что изучил весь документ, если в контексте есть только отдельные фрагменты.
+- Ответ должен быть понятным и структурированным.
 
-Контекст:
+История диалога:
+{history_text}
+
+Контекст из документов:
 {context}
 
-Вопрос пользователя:
+Текущий вопрос пользователя:
 {question}
 
 Ответ:
@@ -69,8 +144,16 @@ class QAService:
     def answer(
         self,
         question: str,
+        history: list[dict] | None = None,
     ) -> dict:
-        chunks = self.retriever.retrieve(question)
+        history = history or []
+
+        search_query = self.build_search_query(
+            question=question,
+            history=history,
+        )
+
+        chunks = self.retriever.retrieve(search_query)
 
         if not chunks:
             return {
@@ -79,14 +162,16 @@ class QAService:
                     "информации для ответа."
                 ),
                 "sources": [],
+                "search_query": search_query,
             }
 
         prompt = self.build_prompt(
-            question,
-            chunks,
+            question=question,
+            context_chunks=chunks,
+            history=history,
         )
 
-        answer = self.llm.generate(prompt)
+        answer = self.llm.generate(prompt).strip()
 
         sources = []
 
@@ -106,4 +191,5 @@ class QAService:
         return {
             "answer": answer,
             "sources": sources,
+            "search_query": search_query,
         }
