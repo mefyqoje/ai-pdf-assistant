@@ -15,9 +15,16 @@ from pdf_assistant.splitters.text_splitter import split_pages_into_chunks
 
 class IndexingService:
     def __init__(self) -> None:
-        self.embedding_model = EmbeddingModel(EMBEDDING_MODEL_NAME)
+        self.embedding_model = EmbeddingModel(
+            EMBEDDING_MODEL_NAME
+        )
 
-    def index_pdf(self, pdf_path: str | Path) -> int:
+    def index_pdf(
+        self,
+        pdf_path: str | Path,
+    ) -> int:
+        pdf_path = Path(pdf_path)
+
         pages = load_pdf_text(pdf_path)
 
         chunks = split_pages_into_chunks(
@@ -26,12 +33,38 @@ class IndexingService:
             chunk_overlap=CHUNK_OVERLAP,
         )
 
+        document_name = pdf_path.name
+
+        for chunk in chunks:
+            chunk["document"] = document_name
+
         texts = [chunk["text"] for chunk in chunks]
+
+        if not texts:
+            raise ValueError(
+                f"В документе {document_name} не найден текст для индексации."
+            )
 
         embeddings = self.embedding_model.encode(texts)
 
         vector_store = VectorStore()
-        vector_store.build(embeddings, chunks)
-        vector_store.save(FAISS_INDEX_PATH, CHUNKS_PATH)
+
+        try:
+            vector_store.load(
+                FAISS_INDEX_PATH,
+                CHUNKS_PATH,
+            )
+        except FileNotFoundError:
+            pass
+
+        vector_store.add(
+            embeddings,
+            chunks,
+        )
+
+        vector_store.save(
+            FAISS_INDEX_PATH,
+            CHUNKS_PATH,
+        )
 
         return len(chunks)
