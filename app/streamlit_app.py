@@ -38,19 +38,33 @@ def render_sources(
             "document",
             "Неизвестный документ",
         )
+
         page = source.get(
             "page",
             "неизвестна",
         )
+
         reranker_score = float(
-            source.get("score", 0.0)
+            source.get(
+                "score",
+                0.0,
+            )
         )
+
         retrieval_score = float(
             source.get(
                 "retrieval_score",
                 0.0,
             )
         )
+
+        bm25_score = float(
+            source.get(
+                "bm25_score",
+                0.0,
+            )
+        )
+
         text = source.get(
             "text",
             "Текст источника отсутствует.",
@@ -64,9 +78,13 @@ def render_sources(
 
         with st.expander(title):
             st.caption(
-                f"FAISS score: "
-                f"{retrieval_score:.3f}"
+                f"FAISS score: {retrieval_score:.3f}"
             )
+
+            st.caption(
+                f"BM25 score: {bm25_score:.3f}"
+            )
+
             st.write(text)
 
 
@@ -75,6 +93,7 @@ def build_history_for_api() -> list[dict]:
 
     for message in st.session_state.messages[:-1]:
         role = message.get("role")
+
         content = str(
             message.get(
                 "content",
@@ -82,10 +101,10 @@ def build_history_for_api() -> list[dict]:
             )
         ).strip()
 
-        if role in {
-            "user",
-            "assistant",
-        } and content:
+        if (
+            role in {"user", "assistant"}
+            and content
+        ):
             history.append(
                 {
                     "role": role,
@@ -101,6 +120,7 @@ def upload_documents(
 ) -> None:
     successful_files = 0
     total_chunks = 0
+
     progress = st.progress(0)
 
     for index, uploaded_file in enumerate(
@@ -145,6 +165,7 @@ def upload_documents(
                     "filename",
                     uploaded_file.name,
                 )
+
                 chunks_count = int(
                     data.get(
                         "chunks_count",
@@ -157,16 +178,14 @@ def upload_documents(
 
                 if (
                     filename
-                    not in st.session_state
-                    .indexed_documents
+                    not in st.session_state.indexed_documents
                 ):
-                    st.session_state\
-                        .indexed_documents\
-                        .append(filename)
+                    st.session_state.indexed_documents.append(
+                        filename
+                    )
 
                 st.success(
-                    f"«{filename}» "
-                    f"проиндексирован: "
+                    f"«{filename}» проиндексирован: "
                     f"{chunks_count} чанков."
                 )
             else:
@@ -200,25 +219,24 @@ def render_sidebar() -> None:
             accept_multiple_files=True,
         )
 
-        if uploaded_files and st.button(
-            "Проиндексировать документы",
-            use_container_width=True,
+        if (
+            uploaded_files
+            and st.button(
+                "Проиндексировать документы",
+                use_container_width=True,
+            )
         ):
             upload_documents(
                 uploaded_files
             )
 
-        if (
-            st.session_state
-            .indexed_documents
-        ):
+        if st.session_state.indexed_documents:
             st.subheader(
                 "Загруженные документы"
             )
 
             for document in (
-                st.session_state
-                .indexed_documents
+                st.session_state.indexed_documents
             ):
                 st.write(
                     f"- {document}"
@@ -240,13 +258,12 @@ def render_sidebar() -> None:
 
 
 def render_chat_history() -> None:
-    for message in (
-        st.session_state.messages
-    ):
+    for message in st.session_state.messages:
         role = message.get(
             "role",
             "assistant",
         )
+
         content = message.get(
             "content",
             "",
@@ -321,9 +338,7 @@ def request_streaming_answer(
                     "и формируем ответ..."
                 )
 
-                for raw_line in (
-                    response.iter_lines()
-                ):
+                for raw_line in response.iter_lines():
                     if not raw_line:
                         continue
 
@@ -342,6 +357,7 @@ def request_streaming_answer(
                             "sources",
                             [],
                         )
+
                         search_query = event.get(
                             "search_query"
                         )
@@ -385,6 +401,7 @@ def request_streaming_answer(
                 }
             )
             return
+
         except json.JSONDecodeError as error:
             error_message = (
                 "Получен некорректный "
@@ -404,6 +421,7 @@ def request_streaming_answer(
         answer_placeholder.markdown(
             full_answer
         )
+
         status_placeholder.empty()
 
         if (

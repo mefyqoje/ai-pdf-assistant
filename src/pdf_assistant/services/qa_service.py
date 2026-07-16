@@ -191,6 +191,12 @@ class QAService:
                             0.0,
                         )
                     ),
+                    "bm25_score": float(
+                        chunk.get(
+                            "bm25_score",
+                            0.0,
+                        )
+                    ),
                     "text": chunk.get(
                         "text",
                         "",
@@ -278,6 +284,7 @@ class QAService:
         )
 
         if prepared["empty_answer"]:
+
             def empty_generator() -> Iterator[str]:
                 yield prepared["empty_answer"]
 

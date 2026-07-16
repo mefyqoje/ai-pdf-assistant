@@ -25,7 +25,7 @@ class RerankerService:
         pairs = [
             (
                 query,
-                chunk["text"],
+                chunk.get("text", ""),
             )
             for chunk in chunks
         ]
@@ -40,15 +40,15 @@ class RerankerService:
         ):
             result = chunk.copy()
 
-            # Сохраняем исходный score FAISS.
             result["retrieval_score"] = float(
                 chunk.get(
-                    "score",
-                    0.0,
+                    "retrieval_score",
+                    chunk.get("score", 0.0),
                 )
             )
-
-            # Основным score становится оценка CrossEncoder.
+            result["bm25_score"] = float(
+                chunk.get("bm25_score", 0.0)
+            )
             result["reranker_score"] = float(
                 reranker_score
             )
@@ -59,13 +59,12 @@ class RerankerService:
             reranked_chunks.append(result)
 
         reranked_chunks.sort(
-            key=lambda item: item["reranker_score"],
+            key=lambda item: item[
+                "reranker_score"
+            ],
             reverse=True,
         )
 
-        actual_top_k = min(
-            top_k,
-            len(reranked_chunks),
-        )
-
-        return reranked_chunks[:actual_top_k]
+        return reranked_chunks[
+            : min(top_k, len(reranked_chunks))
+        ]

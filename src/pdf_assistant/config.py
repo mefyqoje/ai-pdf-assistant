@@ -22,10 +22,8 @@ RERANKER_MODEL_NAME = (
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 
-# Число кандидатов, получаемых из FAISS.
-RETRIEVAL_TOP_K = 20
-
-# Число чанков после reranking.
+FAISS_TOP_K = 20
+BM25_TOP_K = 20
 RERANK_TOP_K = 5
 
 OLLAMA_MODEL_NAME = "llama3.2:3b"
